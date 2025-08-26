@@ -1078,19 +1078,16 @@ class UltimateComprehensiveAblationFramework:
                 'site_overlap': len(split['train_sites'].intersection(split['val_sites']))
             })
         
-        # Aggregate results
-        hamd_corrs = [r['hamd_correlation'] for r in fold_results]
-        hama_corrs = [r['hama_correlation'] for r in fold_results]
-        diag_accs = [r['diagnosis_accuracy'] for r in fold_results]
-        
+        # Aggregate results - compute mean of all metrics
         return {
-            'hamd_correlation_mean': np.mean(hamd_corrs),
-            'hamd_correlation_std': np.std(hamd_corrs),
-            'hama_correlation_mean': np.mean(hama_corrs),
-            'hama_correlation_std': np.std(hama_corrs),
-            'diagnosis_accuracy_mean': np.mean(diag_accs),
-            'diagnosis_accuracy_std': np.std(diag_accs),
-            'composite_score': (abs(np.mean(hamd_corrs)) * 0.3 + abs(np.mean(hama_corrs)) * 0.3 + np.mean(diag_accs) * 0.4),
+            'hamd_r': np.mean([r['hamd_r'] for r in fold_results]),
+            'hamd_r2': np.mean([r['hamd_r2'] for r in fold_results]),
+            'hamd_rmse': np.mean([r['hamd_rmse'] for r in fold_results]),
+            'hama_r': np.mean([r['hama_r'] for r in fold_results]),
+            'hama_r2': np.mean([r['hama_r2'] for r in fold_results]),
+            'hama_rmse': np.mean([r['hama_rmse'] for r in fold_results]),
+            'diagnosis_auc': np.mean([r['diagnosis_auc'] for r in fold_results]),
+            'diagnosis_accuracy': np.mean([r['diagnosis_accuracy'] for r in fold_results]),
             'fold_results': fold_results,
             'n_folds': len(fold_results),
             'site_leakage_detected': any(r['site_overlap'] > 0 for r in fold_results)
@@ -1147,33 +1144,44 @@ class UltimateComprehensiveAblationFramework:
                 diag_model.fit(X_train_selected, y_diag_train)
                 diag_pred_proba = diag_model.predict_proba(X_test_selected)[:, 1]
                 
-                # Evaluate site
-                hamd_r = pearsonr(y_hamd_test, hamd_pred)[0] if len(np.unique(y_hamd_test)) > 1 else 0.0
-                hama_r = pearsonr(y_hama_test, hama_pred)[0] if len(np.unique(y_hama_test)) > 1 else 0.0
+                # Evaluate site with ALL metrics
+                from sklearn.metrics import r2_score, mean_squared_error, roc_auc_score
+                
+                hamd_r = np.corrcoef(y_hamd_test, hamd_pred)[0, 1] if len(np.unique(y_hamd_test)) > 1 else 0.0
+                hamd_r2 = r2_score(y_hamd_test, hamd_pred)
+                hamd_rmse = np.sqrt(mean_squared_error(y_hamd_test, hamd_pred))
+                
+                hama_r = np.corrcoef(y_hama_test, hama_pred)[0, 1] if len(np.unique(y_hama_test)) > 1 else 0.0
+                hama_r2 = r2_score(y_hama_test, hama_pred)
+                hama_rmse = np.sqrt(mean_squared_error(y_hama_test, hama_pred))
+                
+                diag_auc = roc_auc_score(y_diag_test, diag_pred_proba)
                 diag_acc = accuracy_score(y_diag_test, diag_pred_proba > 0.5)
                 
                 site_results.append({
                     'test_site': test_site,
-                    'hamd_correlation': hamd_r,
-                    'hama_correlation': hama_r,
+                    'hamd_r': hamd_r,
+                    'hamd_r2': hamd_r2,
+                    'hamd_rmse': hamd_rmse,
+                    'hama_r': hama_r,
+                    'hama_r2': hama_r2,
+                    'hama_rmse': hama_rmse,
+                    'diagnosis_auc': diag_auc,
                     'diagnosis_accuracy': diag_acc,
                     'n_train': len(X_train),
                     'n_test': len(X_test)
                 })
             
-            # Aggregate LOSO results
-            hamd_corrs = [r['hamd_correlation'] for r in site_results]
-            hama_corrs = [r['hama_correlation'] for r in site_results]  
-            diag_accs = [r['diagnosis_accuracy'] for r in site_results]
-            
+            # Aggregate LOSO results - compute mean of all metrics
             return {
-                'hamd_correlation_mean': np.mean(hamd_corrs),
-                'hamd_correlation_std': np.std(hamd_corrs),
-                'hama_correlation_mean': np.mean(hama_corrs),
-                'hama_correlation_std': np.std(hama_corrs),
-                'diagnosis_accuracy_mean': np.mean(diag_accs),
-                'diagnosis_accuracy_std': np.std(diag_accs),
-                'composite_score': (abs(np.mean(hamd_corrs)) * 0.3 + abs(np.mean(hama_corrs)) * 0.3 + np.mean(diag_accs) * 0.4),
+                'hamd_r': np.mean([r['hamd_r'] for r in site_results]),
+                'hamd_r2': np.mean([r['hamd_r2'] for r in site_results]),
+                'hamd_rmse': np.mean([r['hamd_rmse'] for r in site_results]),
+                'hama_r': np.mean([r['hama_r'] for r in site_results]),
+                'hama_r2': np.mean([r['hama_r2'] for r in site_results]),
+                'hama_rmse': np.mean([r['hama_rmse'] for r in site_results]),
+                'diagnosis_auc': np.mean([r['diagnosis_auc'] for r in site_results]),
+                'diagnosis_accuracy': np.mean([r['diagnosis_accuracy'] for r in site_results]),
                 'site_results': site_results,
                 'n_sites': len(site_results),
                 'strictest_generalization_test': True
